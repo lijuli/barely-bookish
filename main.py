@@ -1,7 +1,7 @@
 from typing import Union
 import databases
 from pydantic import BaseModel
-import sqlalchemy
+import sqlalchemy as sa
 from fastapi import FastAPI
 import uvicorn
 from very_usecure import this_url
@@ -9,7 +9,7 @@ from very_usecure import this_url
 DATABASE_URL = this_url
 
 database = databases.Database(DATABASE_URL)
-metadata = sqlalchemy.MetaData()
+metadata = sa.MetaData()
 
 
 class Item(BaseModel):
@@ -18,24 +18,25 @@ class Item(BaseModel):
     pages: int
 
 
-books = sqlalchemy.Table(
+books = sa.Table(
     "books",
     metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("title", sqlalchemy.String),
-    sqlalchemy.Column("author", sqlalchemy.String),
-    sqlalchemy.Column("pages", sqlalchemy.Integer),
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("title", sa.String),
+    sa.Column("author", sa.String),
+    sa.Column("pages", sa.Integer),
+    sa.Column(
+        "reader_id", sa.ForeignKey("readers.id"), nullable=False, index=True
+        )
 )
 
-#
-# readers = sqlalchemy.Table(
-#     "reader",
-#     metadata,
-#     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-#     sqlalchemy.Column("first name", sqlalchemy.String),
-#     sqlalchemy.Column("last name", sqlalchemy.String),
-
-# )
+readers = sa.Table(
+    "readers",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column("first name", sa.String),
+    sa.Column("last name", sa.String),
+)
 
 # engine = sqlalchemy.create_engine(DATABASE_URL)
 # metadata.create_all(engine)
