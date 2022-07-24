@@ -4,18 +4,29 @@ from pydantic import BaseModel
 import sqlalchemy as sa
 from fastapi import FastAPI
 import uvicorn
-from very_usecure import this_url
+from decouple import config
 
-DATABASE_URL = this_url
+
+DATABASE_URL = f"postgresql://{config('DB_USER')}:{config('DB_PASSWORD')}@127.0.0.1:{config('DB_PORT')}/{config('DB_NAME')}"
 
 database = databases.Database(DATABASE_URL)
 metadata = sa.MetaData()
 
 
-class Item(BaseModel):
+class Book(BaseModel):
     title: str
     author: str
     pages: int
+
+
+class Reader(BaseModel):
+    first_name: str
+    last_name: str
+
+
+class ReaderBook(BaseModel):
+    reader_id: int
+    book_id: int
 
 
 books = sa.Table(
@@ -25,18 +36,31 @@ books = sa.Table(
     sa.Column("title", sa.String),
     sa.Column("author", sa.String),
     sa.Column("pages", sa.Integer),
-    sa.Column(
-        "reader_id", sa.ForeignKey("readers.id"), nullable=False, index=True
-        )
+    # sa.Column(
+    #     "reader_id", sa.ForeignKey("readers.id"), nullable=False, index=True
+    #     )
 )
 
 readers = sa.Table(
     "readers",
     metadata,
     sa.Column("id", sa.Integer, primary_key=True),
-    sa.Column("first name", sa.String),
-    sa.Column("last name", sa.String),
+    sa.Column("first_name", sa.String),
+    sa.Column("last_name", sa.String),
 )
+
+readers_books = sa.Table(
+    "readers_books",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True),
+    sa.Column(
+        "reader_id", sa.ForeignKey("readers.id"), nullable=False
+    ),
+    sa.Column(
+        "book_id", sa.ForeignKey("books.id"), nullable=False
+    ),
+)
+
 
 # engine = sqlalchemy.create_engine(DATABASE_URL)
 # metadata.create_all(engine)
@@ -82,11 +106,31 @@ async def delete_book(id: int):
 #     return {"id": last_record_id}
 
 @app.post("/books/")
-async def create_boook(item: Item):
+async def create_boook(book: Book):
     query = books.insert().values(
-        title=item.title,
-        author=item.author,
-        pages=item.pages,
+        title=book.title,
+        author=book.author,
+        pages=book.pages,
+    )
+    last_record_id = await database.execute(query)
+    return {"id": last_record_id}
+
+
+@app.post("/readers/")
+async def create_reader(reader: Reader):
+    query = readers.insert().values(
+        first_name=reader.first_name,
+        last_name=reader.last_name,
+    )
+    last_record_id = await database.execute(query)
+    return {"id": last_record_id}
+
+
+@app.post("/read/")
+async def read_book(reader_book: ReaderBook):
+    query = readers_books.insert().values(
+        reader_id=reader_book.reader_id,
+        book_id=reader_book.book_id,
     )
     last_record_id = await database.execute(query)
     return {"id": last_record_id}

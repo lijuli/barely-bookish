@@ -17,8 +17,10 @@ env3.*
 env
 docs_build
 venv
+.env
 docs.zip
 archive.zip
+alembic.ini
 
 # vim temporary files
 *~
