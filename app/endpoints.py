@@ -1,6 +1,8 @@
+import pdb
 from typing import Union
 
 from fastapi import APIRouter
+from passlib.context import CryptContext
 
 from .db import database
 from .models import books
@@ -16,6 +18,8 @@ from .schemas import UserSighnOut
 router = APIRouter(
     prefix="/v1",
 )
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 @router.get("/")
@@ -78,6 +82,7 @@ async def read_book(reader_book: ReaderBook):
 
 @router.post("/register/", response_model=UserSighnOut)
 async def create_user(user: UserSighnIn):
+    user.password = pwd_context.hash(user.password)
     query = users.insert().values(**user.dict())
     id = await database.execute(query)
     created_user = await database.fetch_one(
