@@ -14,11 +14,11 @@ from .models import books
 from .models import readers
 from .models import readers_books
 from .models import users
+from .models import Role
 from .schemas import Book
 from .schemas import Reader
 from .schemas import ReaderBook
 from .schemas import UserSighnIn
-from .schemas import UserSighnOut
 
 
 router = APIRouter(
@@ -37,10 +37,10 @@ class CustomHTTPBearer(HTTPBearer):
         try:
             payload = jwt.decode(
                 result.credentials, config("JWT_SECRET"), algorithms=["HS256"]
-                )
+            )
             user = await database.fetch_one(
                 users.select().where(users.c.id == payload["sub"])
-                )
+            )
             request.state.user = user
             return payload
 
@@ -59,6 +59,12 @@ def create_access_token(user):
         return jwt.encode(payload, config("JWT_SECRET"), algorithm="HS256")
     except Exception as e:
         raise e
+
+
+def is_admin(request: Request):
+    user = request.state.user
+    if not user or user.role in (Role.admin, Role.moderator):
+        raise HTTPException(403, "You're not admin or moderator")
 
 
 @router.get("/")
@@ -87,7 +93,9 @@ async def delete_book(id: int):
     return await database.execute(query)
 
 
-@router.post("/books/")
+@router.post(
+    "/books/", dependencies=[Depends(oauth2_scheme), Depends(is_admin)], status_code=201
+)
 async def create_boook(book: Book):
     query = books.insert().values(
         title=book.title,
@@ -124,8 +132,14 @@ async def create_user(user: UserSighnIn):
     user.password = pwd_context.hash(user.password)
     query = users.insert().values(**user.dict())
     id = await database.execute(query)
-    created_user = await database.fetch_one(
-        users.select().where(users.c.id == id)
-        )
+    created_user = await database.fetch_one(users.select().where(users.c.id == id))
     token = create_access_token(created_user)
+    return {"token": token}
+
+
+@router.get("/get_token/")
+async def get_token(id: int):
+    query = users.select().where(users.c.id == id)
+    user = await database.fetch_one(query)
+    token = create_access_token(user)
     return {"token": token}

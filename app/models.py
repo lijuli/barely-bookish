@@ -1,14 +1,21 @@
-import enum
+from enum import Enum
 
 import sqlalchemy as sa
 
-from .db import metadata
+
+metadata = sa.MetaData()
 
 
-class BookGenre(enum.Enum):
+class BookGenre(Enum):
     fiction = "fiction"
     non_fiction = "non_fiction"
     short_story = "short_story"
+
+
+class Role(Enum):
+    admin = "admin"
+    moderator = "moderator"
+    user = "user"
 
 
 users = sa.Table(
@@ -32,7 +39,13 @@ users = sa.Table(
         server_default=sa.func.now(),
         onupdate=sa.func.now(),
     ),
-)
+    sa.Column(
+        "role",
+        sa.Enum(Role),
+        nullable=False,
+        server_default=Role.user.name
+        ),
+    )
 
 
 books = sa.Table(
