@@ -1,8 +1,13 @@
-import pdb
+from datetime import datetime, timedelta
+from decouple import config
 from typing import Union
+from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
+import jwt
+from starlette.requests import Request
 
 from .db import database
 from .models import books
@@ -15,6 +20,7 @@ from .schemas import ReaderBook
 from .schemas import UserSighnIn
 from .schemas import UserSighnOut
 
+
 router = APIRouter(
     prefix="/v1",
 )
@@ -22,12 +28,45 @@ router = APIRouter(
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+class CustomHTTPBearer(HTTPBearer):
+    async def __call__(
+        self, request: Request
+    ) -> Optional[HTTPAuthorizationCredentials]:
+        result = await super().__call__(request)
+
+        try:
+            payload = jwt.decode(
+                result.credentials, config("JWT_SECRET"), algorithms=["HS256"]
+                )
+            user = await database.fetch_one(
+                users.select().where(users.c.id == payload["sub"])
+                )
+            request.state.user = user
+            return payload
+
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(401, "Tokes is expired")
+        except jwt.InvalidTokenError:
+            raise HTTPException(401, "Token is invalid")
+
+
+oauth2_scheme = CustomHTTPBearer()
+
+
+def create_access_token(user):
+    try:
+        payload = {"sub": user["id"], "exp": datetime.utcnow() + timedelta(minutes=120)}
+        return jwt.encode(payload, config("JWT_SECRET"), algorithm="HS256")
+    except Exception as e:
+        raise e
+
+
 @router.get("/")
 async def root():
     return {"message": "Hi!"}
 
 
-@router.get("/readers/")
+@router.get("/readers/", dependencies=[Depends(oauth2_scheme)])
 async def get_readers():
     query = readers.select()
     return await database.fetch_all(query)
@@ -80,7 +119,7 @@ async def read_book(reader_book: ReaderBook):
     return {"id": last_record_id}
 
 
-@router.post("/register/", response_model=UserSighnOut)
+@router.post("/register/")
 async def create_user(user: UserSighnIn):
     user.password = pwd_context.hash(user.password)
     query = users.insert().values(**user.dict())
@@ -88,4 +127,5 @@ async def create_user(user: UserSighnIn):
     created_user = await database.fetch_one(
         users.select().where(users.c.id == id)
         )
-    return created_user
+    token = create_access_token(created_user)
+    return {"token": token}
